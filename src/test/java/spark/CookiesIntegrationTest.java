@@ -1,16 +1,13 @@
 package spark;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-import static spark.Spark.post;
-
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
+import spark.servlet.SparkApplication;
+import spark.util.SparkTestUtil;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.Cookie;
 
 /**
  * System tests for the Cookies support.
@@ -18,95 +15,96 @@ import org.junit.Test;
  */
 public class CookiesIntegrationTest {
 
-    private static final String DEFAULT_HOST_URL = "http://localhost:4567";
-    private HttpClient httpClient = new DefaultHttpClient();
-    
-    @BeforeClass
-    public static void initRoutes() throws InterruptedException {
-        post(new Route("/assertNoCookies") {
+    private static final String COOKIE_NAME = "testCookieName";
+    private static final String COOKIE_VALUE = "testCookieValue";
+    private SparkTestUtil testUtil;
 
+    @Before
+    public void initRoutes() throws ServletException {
+        testUtil = new SparkTestUtil(new SparkApplication() {
             @Override
-            public Object handle(Request request, Response response) {
-                if (!request.cookies().isEmpty()) {
-                    halt(500);
-                }
-                return "";
-            }
-        });
-        
-        post(new Route("/setCookie") {
+            public void init(Spark spark) {
+                spark.post(new Route("/assertNoCookies") {
 
-            @Override
-            public Object handle(Request request, Response response) {
-                response.cookie(request.queryParams("cookieName"), request.queryParams("cookieValue"));
-                return "";
-            }
-        });
-        
-        post(new Route("/assertHasCookie") {
+                    @Override
+                    public Object handle(Request request, Response response) {
+                        if (!request.cookies().isEmpty()) {
+                            halt(500);
+                        }
+                        return "";
+                    }
+                });
 
-            @Override
-            public Object handle(Request request, Response response) {
-                String cookieValue = request.cookie(request.queryParams("cookieName"));
-                if (!request.queryParams("cookieValue").equals(cookieValue)) {
-                    halt(500);
-                }
-                return "";
-            }
-        });
-        
-        post(new Route("/removeCookie") {
+                spark.post(new Route("/setCookie") {
 
-            @Override
-            public Object handle(Request request, Response response) {
-                String cookieName = request.queryParams("cookieName");
-                String cookieValue = request.cookie(cookieName);
-                if (!request.queryParams("cookieValue").equals(cookieValue)) {
-                    halt(500);
-                }
-                response.removeCookie(cookieName);
-                return "";
+                    @Override
+                    public Object handle(Request request, Response response) {
+                        response.cookie(COOKIE_NAME, COOKIE_VALUE);
+                        return "";
+                    }
+                });
+
+                spark.post(new Route("/assertHasCookie") {
+
+                    @Override
+                    public Object handle(Request request, Response response) {
+                        String cookieValue = request.cookie(COOKIE_NAME);
+                        if (!COOKIE_VALUE.equals(cookieValue)) {
+                            halt(500);
+                        }
+                        return "";
+                    }
+                });
+
+                spark.post(new Route("/removeCookie") {
+
+                    @Override
+                    public Object handle(Request request, Response response) {
+                        String cookieValue = request.cookie(COOKIE_NAME);
+                        if (!COOKIE_VALUE.equals(cookieValue)) {
+                            halt(500);
+                        }
+                        response.removeCookie(COOKIE_NAME);
+                        return "";
+                    }
+                });
             }
         });
     }
-    
-    @AfterClass
-    public static void stopServer() {
-        Spark.clearRoutes();
-        Spark.stop();
-    }
-    
+
     @Test
-    public void testEmptyCookies() {
+    public void testEmptyCookies() throws Exception {
         httpPost("/assertNoCookies");
     }
-    
+
     @Test
-    public void testCreateCookie() {
-        String cookieName = "testCookie";
-        String cookieValue = "testCookieValue";
-        httpPost("/setCookie?cookieName=" + cookieName + "&cookieValue=" + cookieValue);
-        httpPost("/assertHasCookie?cookieName=" + cookieName + "&cookieValue=" + cookieValue);
+    public void testParseCookiesFromRequest() throws Exception {
+        httpPost("/assertHasCookie", new Cookie(COOKIE_NAME, COOKIE_VALUE));
     }
-    
+
     @Test
-    public void testRemoveCookie() {
-        String cookieName = "testCookie";
-        String cookieValue = "testCookieValue";
-        httpPost("/setCookie?cookieName=" + cookieName + "&cookieValue=" + cookieValue);
-        httpPost("/removeCookie?cookieName=" + cookieName + "&cookieValue=" + cookieValue);
-        httpPost("/assertNoCookies");
+    public void testCreateCookie() throws Exception {
+        final SparkTestUtil.UrlResponse urlResponse = httpPost("/setCookie");
+        Assert.assertEquals(1, urlResponse.cookies.size());
+        final Cookie cookie = urlResponse.cookies.get(0);
+        Assert.assertEquals(COOKIE_NAME, cookie.getName());
+        Assert.assertEquals(COOKIE_VALUE, cookie.getValue());
     }
-    
-    private void httpPost(String relativePath) {
-        HttpPost request = new HttpPost(DEFAULT_HOST_URL + relativePath);
-        try {
-            HttpResponse response = httpClient.execute(request);
-            assertEquals(200, response.getStatusLine().getStatusCode());
-        } catch (Exception ex) {
-            fail(ex.toString());
-        } finally {
-            request.releaseConnection();
-        }
+
+    @Test
+    public void testRemoveCookie() throws Exception {
+        final SparkTestUtil.UrlResponse urlResponse = httpPost("/removeCookie", new Cookie(COOKIE_NAME, COOKIE_VALUE));
+        Assert.assertEquals(1, urlResponse.cookies.size());
+        final Cookie cookie = urlResponse.cookies.get(0);
+        Assert.assertEquals(COOKIE_NAME, cookie.getName());
+        Assert.assertEquals("", cookie.getValue());
+        Assert.assertEquals(0, cookie.getMaxAge());
+    }
+
+    private SparkTestUtil.UrlResponse httpPost(String relativePath, final Cookie... cookies) throws Exception {
+        final SparkTestUtil.UrlResponse urlResponse = testUtil.doMethod("POST", relativePath, "", cookies);
+        Assert.assertEquals("Request should have been successful", urlResponse.status, 200);
+        Assert.assertFalse("Should have handled request", urlResponse.forwardedToRequestChain);
+        return urlResponse;
     }
 }

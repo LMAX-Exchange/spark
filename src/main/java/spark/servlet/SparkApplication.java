@@ -4,7 +4,7 @@
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
- *  
+ *
  *
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,15 +16,19 @@
  */
 package spark.servlet;
 
+import spark.Spark;
+
 /**
  * The application entry point when Spark is run in a servlet context.
  *
  * @author Per Wendel
  */
 public interface SparkApplication {
-    
+
     /**
      * Invoked from the SparkFilter. Add routes here.
+     *
+     * @param spark the spark instance for this application
      */
-    void init();
+    void init(Spark spark);
 }

@@ -16,8 +16,14 @@
  */
 package spark.webserver;
 
-import java.io.IOException;
-import java.util.List;
+import spark.HaltException;
+import spark.Request;
+import spark.RequestResponseFactory;
+import spark.Response;
+import spark.Route;
+import spark.route.HttpMethod;
+import spark.route.RouteMatch;
+import spark.route.RouteMatcher;
 
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
@@ -27,16 +33,8 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import spark.Access;
-import spark.HaltException;
-import spark.Request;
-import spark.RequestResponseFactory;
-import spark.Response;
-import spark.Route;
-import spark.route.HttpMethod;
-import spark.route.RouteMatch;
-import spark.route.RouteMatcher;
+import java.io.IOException;
+import java.util.List;
 
 /**
  * Filter for matching of filters and routes.
@@ -104,7 +102,7 @@ public class MatcherFilter implements Filter {
 
                     filter.handle(req, res);
 
-                    String bodyAfterFilter = Access.getBody(response);
+                    String bodyAfterFilter = response.body();
                     if (bodyAfterFilter != null) {
                         bodyContent = bodyAfterFilter;
                     }
@@ -168,7 +166,7 @@ public class MatcherFilter implements Filter {
                     spark.Filter filter = (spark.Filter) filterTarget;
                     filter.handle(req, res);
 
-                    String bodyAfterFilter = Access.getBody(response);
+                    String bodyAfterFilter = response.body();
                     if (bodyAfterFilter != null) {
                         bodyContent = bodyAfterFilter;
                     }
