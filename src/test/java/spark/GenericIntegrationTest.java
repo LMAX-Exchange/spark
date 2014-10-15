@@ -12,6 +12,8 @@ public class GenericIntegrationTest {
     private SparkTestUtil testUtil;
     private Spark spark;
 
+    private boolean cleanUpCalled = false;
+
     @Before
     public void setup() throws Exception {
         testUtil = new SparkTestUtil(new SparkApplication()
@@ -28,6 +30,15 @@ public class GenericIntegrationTest {
                     public void handle(Request request, Response response)
                     {
                         halt(401, "Go Away!");
+                    }
+                });
+
+                spark.cleanup(new Filter("/protected/*")
+                {
+                    @Override
+                    public void handle(Request request, Response response)
+                    {
+                        cleanUpCalled = true;
                     }
                 });
 
@@ -121,7 +132,7 @@ public class GenericIntegrationTest {
                 {
                     @Override
                     public Object handle(Request request, Response response)
-                    {
+                    {                                   response.header("after", "foobar");
                         String body = request.body();
                         response.status(201); // created
                         return "Body was: " + body;
@@ -145,6 +156,15 @@ public class GenericIntegrationTest {
                     public void handle(Request request, Response response)
                     {
                         response.header("after", "foobar");
+                    }
+                });
+
+                spark.cleanup(new Filter("/hi")
+                {
+                    @Override
+                    public void handle(Request request, Response response)
+                    {
+                        cleanUpCalled = true;
                     }
                 });
             }
@@ -237,6 +257,22 @@ public class GenericIntegrationTest {
         registerEchoRoute(uppperCasedRoutePart);
         assertEchoRoute(lowerCasedRoutePart);
         assertEchoRoute(uppperCasedRoutePart);
+    }
+
+    @Test
+    public void shouldRunCleanUpFiltersWhenFiltersCompleteSuccessfully() throws Exception
+    {
+        UrlResponse response = testUtil.doMethod("GET", "/hi", null);
+        Assert.assertEquals(200, response.status);
+        Assert.assertTrue(cleanUpCalled);
+    }
+
+    @Test
+    public void shouldRunCleanUpFiltersWhenFiltersHalt() throws Exception
+    {
+        UrlResponse response = testUtil.doMethod("GET", "/protected/halt", null);
+        Assert.assertEquals(401, response.status);
+        Assert.assertTrue(cleanUpCalled);
     }
 
     private void registerEchoRoute(final String routePart) {

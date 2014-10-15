@@ -20,5 +20,5 @@ package spark.route;
  * @author Per Wendel
  */
 public enum HttpMethod {
-    get, post, put, patch, delete, head, trace, connect, options, before, after
+    get, post, put, patch, delete, head, trace, connect, options, before, after, cleanup
 }

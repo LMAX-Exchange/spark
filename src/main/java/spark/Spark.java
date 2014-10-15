@@ -162,6 +162,19 @@ public final class Spark {
         addFilter(HttpMethod.after.name(), filter);
     }
 
+    /**
+     * Maps a filter to be executed after any matching routes and after all 'after' filters even if an error is thrown or halt is called.
+     *
+     * Filters used here should generally be used to release resources only. It's strongly recommended that cleanup filters avoid changing the response in any way as it is not possible
+     * for previous filters to prevent these cleanup filters from running.
+     *
+     * @param filter The filter
+     */
+
+    public synchronized void cleanup(Filter filter) {
+        addFilter(HttpMethod.cleanup.name(), filter);
+    }
+
     private void addRoute(String httpMethod, Route route) {
         routeMatcher.parseValidateAddRoute(httpMethod + " '" + route.getPath()
                 + "'", route.getAcceptType(), route);

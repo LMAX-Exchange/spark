@@ -34,7 +34,6 @@ import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.List;
 
 /**
  * Filter for matching of filters and routes.
@@ -87,33 +86,11 @@ public class MatcherFilter implements Filter {
         LOG.debug("httpMethod:" + httpMethodStr + ", uri: " + uri);
         try {
             // BEFORE filters
-            List<RouteMatch> matchSet = routeMatcher.findTargetsForRequestedRoute(HttpMethod.before, uri, acceptType);
-
-            for (RouteMatch filterMatch : matchSet) {
-                Object filterTarget = filterMatch.getTarget();
-                if (filterTarget instanceof spark.Filter) {
-                    Request request = RequestResponseFactory.create(filterMatch, httpRequest);
-                    Response response = RequestResponseFactory.create(httpResponse);
-
-                    spark.Filter filter = (spark.Filter) filterTarget;
-
-                    req.setDelegate(request);
-                    res.setDelegate(response);
-
-                    filter.handle(req, res);
-
-                    String bodyAfterFilter = response.body();
-                    if (bodyAfterFilter != null) {
-                        bodyContent = bodyAfterFilter;
-                    }
-                }
-            }
-            // BEFORE filters, END
+            bodyContent = applyFilters(httpRequest, httpResponse, bodyContent, req, res, spark.route.HttpMethod.before, uri, acceptType);
 
             HttpMethod httpMethod = HttpMethod.valueOf(httpMethodStr);
 
-            RouteMatch match = null;
-            match = routeMatcher.findTargetForRequestedRoute(httpMethod, uri, acceptType);
+            RouteMatch match = routeMatcher.findTargetForRequestedRoute(httpMethod, uri, acceptType);
 
             Object target = null;
             if (match != null) {
@@ -152,27 +129,7 @@ public class MatcherFilter implements Filter {
             }
 
             // AFTER filters
-            matchSet = routeMatcher.findTargetsForRequestedRoute(HttpMethod.after, uri, acceptType);
-
-            for (RouteMatch filterMatch : matchSet) {
-                Object filterTarget = filterMatch.getTarget();
-                if (filterTarget instanceof spark.Filter) {
-                    Request request = RequestResponseFactory.create(filterMatch, httpRequest);
-                    Response response = RequestResponseFactory.create(httpResponse);
-
-                    req.setDelegate(request);
-                    res.setDelegate(response);
-
-                    spark.Filter filter = (spark.Filter) filterTarget;
-                    filter.handle(req, res);
-
-                    String bodyAfterFilter = response.body();
-                    if (bodyAfterFilter != null) {
-                        bodyContent = bodyAfterFilter;
-                    }
-                }
-            }
-            // AFTER filters, END
+            bodyContent = applyFilters(httpRequest, httpResponse, bodyContent, req, res, spark.route.HttpMethod.after, uri, acceptType);
 
         } catch (HaltException hEx) {
             LOG.debug("halt performed");
@@ -182,6 +139,8 @@ public class MatcherFilter implements Filter {
             } else {
                 bodyContent = "";
             }
+        } finally {
+            bodyContent = applyFilters(httpRequest, httpResponse, bodyContent, req, res, spark.route.HttpMethod.cleanup, uri, acceptType);
         }
 
         boolean consumed = bodyContent != null;
@@ -207,6 +166,33 @@ public class MatcherFilter implements Filter {
         } else if (chain != null) {
             chain.doFilter(httpRequest, httpResponse);
         }
+    }
+
+    private String applyFilters(final javax.servlet.http.HttpServletRequest httpRequest, final javax.servlet.http.HttpServletResponse httpResponse, String bodyContent,
+                                final RequestWrapper req, final ResponseWrapper res, final HttpMethod method, final String uri, final String acceptType)
+    {
+        final java.util.List<spark.route.RouteMatch> matchedFilters = routeMatcher.findTargetsForRequestedRoute(method, uri, acceptType);
+
+        for (spark.route.RouteMatch filterMatch : matchedFilters) {
+            Object filterTarget = filterMatch.getTarget();
+            if (filterTarget instanceof spark.Filter) {
+                spark.Request request = spark.RequestResponseFactory.create(filterMatch, httpRequest);
+                spark.Response response = spark.RequestResponseFactory.create(httpResponse);
+
+                spark.Filter filter = (spark.Filter) filterTarget;
+
+                req.setDelegate(request);
+                res.setDelegate(response);
+
+                filter.handle(req, res);
+
+                String bodyAfterFilter = response.body();
+                if (bodyAfterFilter != null) {
+                    bodyContent = bodyAfterFilter;
+                }
+            }
+        }
+        return bodyContent;
     }
 
     public void destroy() {
