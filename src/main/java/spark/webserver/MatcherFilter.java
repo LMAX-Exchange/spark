@@ -16,30 +16,21 @@
  */
 package spark.webserver;
 
-import java.io.IOException;
-import java.util.List;
-
-import javax.servlet.Filter;
-import javax.servlet.FilterChain;
-import javax.servlet.FilterConfig;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import spark.Access;
-import spark.FilterImpl;
-import spark.HaltException;
-import spark.Request;
-import spark.RequestResponseFactory;
-import spark.Response;
-import spark.RouteImpl;
+import spark.*;
 import spark.exception.ExceptionHandlerImpl;
 import spark.exception.ExceptionMapper;
 import spark.route.HttpMethod;
 import spark.route.RouteMatch;
 import spark.route.SimpleRouteMatcher;
+
+import javax.servlet.Filter;
+import javax.servlet.*;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * Filter for matching of filters and routes.
@@ -238,7 +229,18 @@ public class MatcherFilter implements Filter {
                 if (httpResponse.getContentType() == null) {
                     httpResponse.setContentType("text/html; charset=utf-8");
                 }
-                httpResponse.getOutputStream().write(bodyContent.getBytes("utf-8"));
+                boolean acceptsGzip = Collections.list(httpRequest.getHeaders("Accept-Encoding")).stream().anyMatch(s -> s.contains("gzip"));
+                
+                //gzip compression support
+                if(acceptsGzip && httpResponse.getHeaders("Content-Encoding").contains("gzip"))
+                {
+                    try(GZIPOutputStream gzipOut = new GZIPOutputStream(httpResponse.getOutputStream()))
+                    {
+                        gzipOut.write(bodyContent.getBytes("utf-8"));
+                    }
+                }
+                else
+                    httpResponse.getOutputStream().write(bodyContent.getBytes("utf-8"));
             }
         } else if (chain != null) {
             chain.doFilter(httpRequest, httpResponse);
